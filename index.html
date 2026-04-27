@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Manager - รายการสินค้า</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap');
+        body { font-family: 'Sarabun', sans-serif; }
+        .bg-primary { background-color: #26b899; }
+        .text-primary { color: #26b899; }
+        .tab-active { border-bottom: 3px solid white; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-gray-100 pb-24">
+
+    <header class="bg-primary text-white sticky top-0 z-20 shadow-md">
+        <div class="p-4 flex justify-between items-center">
+            <button onclick="toggleHistory()"><i class="fas fa-history text-xl"></i></button>
+            <h1 class="text-xl font-bold">จัดการสต็อกสินค้า</h1>
+            <button onclick="openModal()"><i class="fas fa-plus-circle text-2xl"></i></button>
+        </div>
+
+        <div class="px-4 pb-3">
+            <div class="relative">
+                <i class="fas fa-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                <input type="text" id="searchTerm" oninput="renderStock()" placeholder="ค้นหาชื่อสินค้า หมวดหมู่ หรือแหล่งซื้อ..." 
+                    class="w-full pl-9 pr-4 py-2 rounded-full text-sm text-gray-800 outline-none shadow-inner">
+            </div>
+        </div>
+
+        <div class="flex justify-around text-sm border-t border-white/10">
+            <button onclick="setFilter('all')" id="t-all" class="py-2 px-4 tab-active">ทั้งหมด</button>
+            <button onclick="setFilter('low')" id="t-low" class="py-2 px-4">ใกล้หมด</button>
+            <button onclick="setFilter('out')" id="t-out" class="py-2 px-4">หมดสต็อก</button>
+        </div>
+    </header>
+
+    <main id="productList" class="p-4 space-y-3"></main>
+
+    <div id="modal" class="fixed inset-0 bg-black/60 hidden z-30 flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
+            <div class="p-4 bg-gray-50 border-b flex justify-between">
+                <span class="font-bold text-gray-700">ข้อมูลสินค้า</span>
+                <button onclick="closeModal()" class="text-gray-400"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4 text-sm">
+                <div>
+                    <label class="text-[10px] text-gray-400 font-bold uppercase">ชื่อสินค้า *</label>
+                    <input type="text" id="pName" placeholder="ระบุชื่อสินค้า" class="w-full border-b py-2 outline-none focus:border-primary">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[10px] text-gray-400 font-bold uppercase">หมวดหมู่ *</label>
+                        <select id="pGroup" class="w-full border-b py-2 outline-none bg-white">
+                            <option value="ขนมขบเคี้ยว">หมวดหมู่ขนมขบเคี้ยว</option>
+                            <option value="น้ำ">หมวดหมู่น้ำ</option>
+                            <option value="ของใช้ทั่วไป">หมวดหมู่ของใช้ทั่วไป</option>
+                            <option value="อื่น ๆ">หมวดหมู่อื่น ๆ</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-gray-400 font-bold uppercase">ราคาขาย (บาท)</label>
+                        <input type="number" id="pPrice" placeholder="0.00" class="w-full border-b py-2 outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[10px] text-gray-400 font-bold uppercase">จำนวนสินค้าที่ต้องการเพิ่ม *</label>
+                        <input type="number" id="pQty" class="w-full border-b py-1 outline-none" value="0">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-gray-400 font-bold uppercase">แจ้งเตือนเมื่อเหลือต่ำกว่า *</label>
+                        <input type="number" id="pMin" class="w-full border-b py-1 outline-none" value="5">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] text-gray-400 font-bold uppercase">แหล่งซื้อสินค้า *</label>
+                    <input type="text" id="pSource" placeholder="เช่น Makro, ตลาดนัด" class="w-full border-b py-2 outline-none">
+                </div>
+                <button onclick="confirmSave()" class="w-full bg-primary text-white py-3 rounded-xl font-bold mt-4 shadow-lg active:scale-95 transition">บันทึกลงระบบ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="historyModal" class="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-40 transform translate-x-full transition-transform duration-300 flex flex-col border-l">
+        <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
+            <span class="font-bold">ประวัติความเคลื่อนไหว</span>
+            <button onclick="toggleHistory()" class="text-gray-400"><i class="fas fa-chevron-right"></i></button>
+        </div>
+        <div id="logContent" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50"></div>
+    </div>
+
+    <nav class="fixed bottom-0 w-full bg-white border-t flex justify-around p-3 text-[10px] text-gray-400 z-20">
+        <a href="Dashboard.html" class="flex flex-col items-center">
+            <i class="fas fa-chart-pie text-lg mb-1"></i>ภาพรวม
+        </a>
+        <div class="flex flex-col items-center text-primary">
+            <i class="fas fa-box text-lg mb-1"></i>รายการสินค้า
+        </div>
+        <div class="flex flex-col items-center">
+            <i class="fas fa-cog text-lg mb-1"></i>ตั้งค่า
+        </div>
+    </nav>
+
+    <script src="app.js"></script>
+</body>
+</html>
