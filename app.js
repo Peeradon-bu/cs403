@@ -1,12 +1,13 @@
 // Data Storage
 let inventory = JSON.parse(localStorage.getItem('my_stock_final')) || [];
 let logs = JSON.parse(localStorage.getItem('my_logs_final')) || [];
+let monthlyPlan = JSON.parse(localStorage.getItem('my_monthly_plan')) || {}; 
 let currentFilter = 'all';
 let myChart;
-let editingId = null; // ตัวแปรสำหรับเช็คว่ากำลังกด "แก้ไข" สินค้าตัวไหนอยู่
+let editingId = null;
 
 // ----------------------------------------------------
-// 1. ระบบจัดการสินค้า (เพิ่ม, แก้ไข, ลบ)
+// 1. ระบบจัดการสินค้าหลัก (เพิ่ม, แก้ไข, ลบ)
 // ----------------------------------------------------
 function confirmSave() {
     const name = document.getElementById('pName').value.trim();
@@ -19,14 +20,12 @@ function confirmSave() {
     if (!name || !source) return alert("กรุณาระบุชื่อและแหล่งซื้อให้ครบ");
 
     if (editingId) {
-        // กรณี: กดแก้ไขสินค้า
         const itemIndex = inventory.findIndex(i => String(i.id) === String(editingId));
         if (itemIndex > -1) {
             inventory[itemIndex] = { id: editingId, name, group, price, qty, min, source };
             addLog(name, `แก้ไขข้อมูลสินค้า`, "-");
         }
     } else {
-        // กรณี: เพิ่มสินค้าใหม่
         if (inventory.some(i => i.name.toLowerCase() === name.toLowerCase() && i.group === group)) {
             return alert("มีชื่อสินค้านี้อยู่ในหมวดหมู่นี้แล้ว");
         }
@@ -44,6 +43,7 @@ function deleteProduct() {
     
     if (confirm(`คุณแน่ใจหรือไม่ที่จะลบสินค้า "${item.name}" อย่างถาวร?`)) {
         inventory = inventory.filter(i => String(i.id) !== String(editingId));
+        delete monthlyPlan[editingId]; 
         addLog(item.name, `ลบสินค้าออกจากระบบ`, "-");
         saveData();
         closeModal();
@@ -74,12 +74,189 @@ function updateQty(id, change) {
 }
 
 // ----------------------------------------------------
-// 2. ระบบตั้งค่า (Export & Reset)
+// 2. ระบบสินค้ารายเดือน (Monthly Restock) 
+// ----------------------------------------------------
+function openMonthlyConfigModal() {
+    const modal = document.getElementById('monthlyConfigModal');
+    if (!modal) return;
+    renderMonthlyConfig();
+    modal.classList.remove('hidden');
+}
+
+function closeMonthlyConfigModal() {
+    document.getElementById('monthlyConfigModal').classList.add('hidden');
+}
+
+function renderMonthlyConfig() {
+    const list = document.getElementById('monthlyConfigList');
+    const dataList = document.getElementById('inventoryList');
+    if (!list || !dataList) return;
+
+    // 1. นำรายชื่อสินค้าทั้งหมดมาใส่ใน Datalist เพื่อช่วยพิมพ์ (Auto-suggest)
+    dataList.innerHTML = inventory.map(i => `<option value="${i.name}">`).join('');
+
+    // 2. แสดงรายการสินค้าที่ *อยู่ในแผนแล้ว*
+    let plannedIds = Object.keys(monthlyPlan);
+    if (plannedIds.length === 0) {
+        list.innerHTML = `<div class="text-center py-6 text-gray-400 text-xs">ยังไม่มีสินค้าในแผน<br>พิมพ์ชื่อสินค้าด้านบนแล้วกด "เพิ่ม"</div>`;
+    } else {
+        let html = '';
+        plannedIds.forEach(id => {
+            const item = inventory.find(i => String(i.id) === String(id));
+            if (item) {
+                const qty = monthlyPlan[id];
+                html += `
+                    <div class="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                        <div class="flex-1 pr-2 truncate">
+                            <div class="font-bold text-gray-700 text-sm truncate">${item.name}</div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button onclick="updateMonthlyQty(${id}, -1)" class="w-8 h-8 flex justify-center items-center rounded-lg bg-gray-50 border text-gray-500 hover:text-red-500">-</button>
+                            <span class="w-8 text-center font-bold text-sm text-primary">${qty}</span>
+                            <button onclick="updateMonthlyQty(${id}, 1)" class="w-8 h-8 flex justify-center items-center rounded-lg bg-gray-50 border text-gray-500 hover:text-green-500">+</button>
+                            <button onclick="removeMonthlyPlan(${id})" class="w-8 h-8 flex justify-center items-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 ml-2 transition"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                delete monthlyPlan[id]; 
+            }
+        });
+        list.innerHTML = html;
+    }
+}
+
+// ฟังก์ชันเพิ่มสินค้าลงแผนรายเดือน (อัปเดตใหม่ ให้สร้างอัตโนมัติถ้าไม่มีในระบบ)
+function addToMonthlyPlan() {
+    const nameInput = document.getElementById('monthlyItemName');
+    const qtyInput = document.getElementById('monthlyItemQty');
+    const name = nameInput.value.trim();
+    const qty = parseInt(qtyInput.value);
+
+    if (!name) return alert("กรุณาพิมพ์ชื่อสินค้าที่ต้องการเพิ่ม");
+    if (isNaN(qty) || qty <= 0) return alert("กรุณาระบุจำนวน (มากกว่า 0)");
+
+    // ค้นหาว่ามีสินค้านี้ในระบบสต็อกหรือยัง (ตรวจแบบไม่สนใจตัวพิมพ์เล็ก/ใหญ่)
+    let existingItem = inventory.find(i => i.name.toLowerCase() === name.toLowerCase());
+    let targetId;
+
+    if (existingItem) {
+        targetId = existingItem.id;
+    } else {
+        // ถ้าไม่มีในระบบสต็อก สร้างใหม่ให้เลย!
+        const newItem = { 
+            id: Date.now(), 
+            name: name, 
+            group: "อื่น ๆ", // ให้ค่าเริ่มต้นเป็นหมวด อื่นๆ
+            price: 0, 
+            qty: 0, 
+            min: 5, 
+            source: "เพิ่มจากแผนรายเดือน" 
+        };
+        inventory.push(newItem);
+        addLog(name, `สร้างใหม่อัตโนมัติจากแผนรายเดือน`, "-");
+        targetId = newItem.id;
+    }
+
+    // เพิ่มเข้ารายเดือน (ถ้ามีอยู่แล้วให้บวกทบ, ถ้าไม่มีให้เซ็ตค่าใหม่)
+    if (monthlyPlan[targetId]) {
+        monthlyPlan[targetId] += qty;
+    } else {
+        monthlyPlan[targetId] = qty;
+    }
+
+    saveData(); 
+    nameInput.value = ''; 
+    qtyInput.value = ''; 
+    renderMonthlyConfig(); // รีเฟรชรายการ
+    
+    // แจ้งเตือนเพื่อให้รู้ว่าระบบสร้างให้ใหม่นะ (กรณีพิมพ์ชื่อแปลกๆ)
+    if (!existingItem) {
+        alert(`สร้างสินค้า "${name}" เข้าระบบและลงแผนรายเดือนสำเร็จ!\n(คุณสามารถไปแก้ไข หมวดหมู่/ราคา ได้ในหน้า "รายการสินค้า" ภายหลัง)`);
+    }
+}
+
+function updateMonthlyQty(id, change) {
+    if (monthlyPlan[id]) {
+        let newQty = monthlyPlan[id] + change;
+        if (newQty <= 0) {
+            removeMonthlyPlan(id);
+        } else {
+            monthlyPlan[id] = newQty;
+            saveData();
+            renderMonthlyConfig();
+        }
+    }
+}
+
+function removeMonthlyPlan(id) {
+    if (confirm("ต้องการลบสินค้านี้ออกจากแผนรายเดือนใช่หรือไม่?")) {
+        delete monthlyPlan[id];
+        saveData();
+        renderMonthlyConfig();
+    }
+}
+
+function openMonthlyExecuteModal() {
+    const list = document.getElementById('monthlyExecuteList');
+    if (!list) return;
+
+    let hasPlan = false;
+    let html = '';
+
+    inventory.forEach(item => {
+        const addQty = monthlyPlan[item.id];
+        if (addQty && addQty > 0) {
+            hasPlan = true;
+            html += `
+                <div class="flex justify-between items-center border-b border-gray-200 border-dashed py-2 last:border-0">
+                    <span class="text-sm font-bold text-gray-700">${item.name}</span>
+                    <span class="text-green-600 font-bold bg-green-100 px-2 py-1 rounded-md text-sm">+${addQty} ชิ้น</span>
+                </div>
+            `;
+        }
+    });
+
+    if (!hasPlan) {
+        html = `<div class="text-center py-6 text-gray-400 text-sm">ยังไม่ได้ตั้งค่าสินค้ารายเดือน<br>ไปที่หน้า "ตั้งค่า" เพื่อเพิ่มรายการ</div>`;
+        document.getElementById('btnConfirmMonthly').classList.add('hidden');
+    } else {
+        document.getElementById('btnConfirmMonthly').classList.remove('hidden');
+    }
+
+    list.innerHTML = html;
+    document.getElementById('monthlyExecuteModal').classList.remove('hidden');
+}
+
+function closeMonthlyExecuteModal() {
+    document.getElementById('monthlyExecuteModal').classList.add('hidden');
+}
+
+function executeMonthlyRestock() {
+    let itemsAdded = 0;
+    inventory.forEach(item => {
+        const addQty = monthlyPlan[item.id];
+        if (addQty && addQty > 0) {
+            item.qty = (parseInt(item.qty) || 0) + addQty;
+            addLog(item.name, `ระบบรับรายเดือน (+${addQty})`, item.source);
+            itemsAdded++;
+        }
+    });
+
+    if (itemsAdded > 0) {
+        saveData();
+        closeMonthlyExecuteModal();
+        alert(`เติมสต็อกสินค้ารายเดือนสำเร็จ (${itemsAdded} รายการ)`);
+    }
+}
+
+// ----------------------------------------------------
+// 3. ระบบตั้งค่า (Export & Reset)
 // ----------------------------------------------------
 function exportCSV() {
     if (inventory.length === 0) return alert("ไม่มีข้อมูลให้ส่งออก");
 
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // \uFEFF ป้องกันภาษาไทยเพี้ยนใน Excel
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
     csvContent += "รหัส,ชื่อสินค้า,หมวดหมู่,ราคาขาย,จำนวนคงเหลือ,จุดแจ้งเตือน,แหล่งซื้อ\n";
 
     inventory.forEach(item => {
@@ -97,21 +274,20 @@ function exportCSV() {
 }
 
 function resetData() {
-    if (confirm("⚠️ คำเตือน: คุณต้องการลบข้อมูลสินค้าและประวัติทั้งหมดใช่หรือไม่?\nการกระทำนี้ไม่สามารถย้อนกลับได้!")) {
+    if (confirm("⚠️ คำเตือน: คุณต้องการลบข้อมูลสินค้าและประวัติทั้งหมดใช่หรือไม่?")) {
         let confirmText = prompt("พิมพ์คำว่า 'ยืนยัน' เพื่อทำการลบข้อมูล:");
         if (confirmText === "ยืนยัน") {
             inventory = [];
             logs = [];
+            monthlyPlan = {};
             saveData();
             alert("ล้างข้อมูลระบบเรียบร้อยแล้ว");
-        } else {
-            alert("ยกเลิกการล้างข้อมูล (พิมพ์ไม่ถูกต้อง)");
         }
     }
 }
 
 // ----------------------------------------------------
-// 3. ระบบทำงานเบื้องหลัง (Save, Log, UI Rendering)
+// 4. ระบบทำงานเบื้องหลัง (Save, Log, UI Rendering)
 // ----------------------------------------------------
 function addLog(name, action, source) {
     const now = new Date().toLocaleString('th-TH');
@@ -122,6 +298,7 @@ function addLog(name, action, source) {
 function saveData() {
     localStorage.setItem('my_stock_final', JSON.stringify(inventory));
     localStorage.setItem('my_logs_final', JSON.stringify(logs));
+    localStorage.setItem('my_monthly_plan', JSON.stringify(monthlyPlan)); 
     
     if (document.getElementById('productList')) renderStock();
     if (document.getElementById('categoryChart')) updateAnalytics();
@@ -217,15 +394,14 @@ function updateAnalytics() {
 }
 
 // ----------------------------------------------------
-// 4. ตัวควบคุม Popup และ Modal
+// 5. ตัวควบคุม Popup และ Modal
 // ----------------------------------------------------
 function openModal(id = null) {
-    editingId = id; // บันทึกว่ากำลังแก้ไข ID อะไรอยู่ (ถ้าเป็น null แปลว่าเพิ่มใหม่)
+    editingId = id; 
     const deleteBtn = document.getElementById('deleteBtn');
     const modalTitle = document.getElementById('modalTitle');
 
     if (id) {
-        // ดึงข้อมูลเดิมมาโชว์ในช่อง
         const item = inventory.find(i => String(i.id) === String(id));
         document.getElementById('pName').value = item.name;
         document.getElementById('pGroup').value = item.group;
@@ -235,9 +411,8 @@ function openModal(id = null) {
         document.getElementById('pSource').value = item.source;
         
         modalTitle.innerText = "แก้ไขข้อมูลสินค้า";
-        if (deleteBtn) deleteBtn.classList.remove('hidden'); // โชว์ปุ่มลบ
+        if (deleteBtn) deleteBtn.classList.remove('hidden'); 
     } else {
-        // ล้างช่องว่างสำหรับเพิ่มใหม่
         document.getElementById('pName').value = '';
         document.getElementById('pPrice').value = '';
         document.getElementById('pQty').value = '0';
@@ -245,7 +420,7 @@ function openModal(id = null) {
         document.getElementById('pSource').value = '';
         
         modalTitle.innerText = "เพิ่มสินค้าใหม่";
-        if (deleteBtn) deleteBtn.classList.add('hidden'); // ซ่อนปุ่มลบ
+        if (deleteBtn) deleteBtn.classList.add('hidden'); 
     }
     
     document.getElementById('modal').classList.remove('hidden');
@@ -253,7 +428,7 @@ function openModal(id = null) {
 
 function closeModal() { 
     document.getElementById('modal').classList.add('hidden'); 
-    editingId = null; // เคลียร์สถานะ
+    editingId = null; 
 }
 
 function toggleHistory() { 
