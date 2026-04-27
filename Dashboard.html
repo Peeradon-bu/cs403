@@ -6,22 +6,24 @@
     <title>Dashboard - สรุปข้อมูล</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap');
-        body { font-family: 'Sarabun', sans-serif; overflow-x: hidden; }
+        body { font-family: 'Sarabun', sans-serif; background-color: #e5e7eb; }
         .bg-primary { background-color: #26b899; }
         .text-primary { color: #26b899; }
-        .chart-container { position: relative; height: 220px; width: 100%; }
+        .app-container { max-width: 480px; margin: 0 auto; background-color: #f3f4f6; min-height: 100vh; position: relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); overflow-x: hidden; }
     </style>
 </head>
-<body class="bg-gray-100 pb-24">
+<body>
 
+<div class="app-container pb-24">
     <header class="bg-primary text-white p-6 shadow-md rounded-b-[2rem]">
         <h1 class="text-xl font-bold">Dashboard</h1>
         <p class="text-[10px] text-white/70">สรุปข้อมูลสต็อกสินค้า</p>
     </header>
 
-    <main class="p-4 space-y-4 -mt-4 max-w-lg mx-auto">
+    <main class="p-4 space-y-4 -mt-4">
         <div class="grid grid-cols-2 gap-3">
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
                 <p class="text-[9px] text-gray-400 font-bold uppercase mb-1">มูลค่าสต็อกรวม</p>
@@ -35,31 +37,34 @@
 
         <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
             <h3 class="text-xs font-bold text-gray-500 mb-3 text-center uppercase">สัดส่วนตามหมวดหมู่</h3>
-            <div class="chart-container">
+            <div class="relative h-48 w-full">
                 <canvas id="categoryChart"></canvas>
             </div>
         </div>
 
         <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
             <h3 class="text-[10px] font-bold text-gray-400 mb-3 uppercase tracking-wider">สถานะรายหมวดหมู่</h3>
-            <div id="categoryBreakdown" class="space-y-3 text-sm">
-                </div>
+            <div id="categoryBreakdown" class="space-y-3 text-sm"></div>
         </div>
     </main>
 
-    <nav class="fixed bottom-0 w-full bg-white border-t flex justify-around p-3 text-[10px] text-gray-400 z-20 shadow-lg">
-        <div class="flex flex-col items-center text-primary">
+    <nav class="absolute bottom-0 w-full bg-white border-t flex justify-around p-3 text-[10px] text-gray-400 z-20 rounded-b-xl shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.1)]">
+        <div class="flex flex-col items-center w-1/3 text-primary">
             <i class="fas fa-chart-pie text-lg mb-1"></i>ภาพรวม
         </div>
-        <a href="index.html" class="flex flex-col items-center">
+        <a href="index.html" class="flex flex-col items-center w-1/3 hover:text-primary">
             <i class="fas fa-box text-lg mb-1"></i>รายการสินค้า
         </a>
-        <div class="flex flex-col items-center">
+        <div class="flex flex-col items-center w-1/3 opacity-50 cursor-not-allowed">
             <i class="fas fa-cog text-lg mb-1"></i>ตั้งค่า
         </div>
     </nav>
+</div>
 
-    <script src="app.js"></script>
-    <script>window.onload = updateAnalytics;</script>
+<script src="app.js"></script>
+<script>
+    // โหลดข้อมูล Dashboard ทันทีที่เปิดหน้านี้
+    window.onload = updateAnalytics;
+</script>
 </body>
 </html>
